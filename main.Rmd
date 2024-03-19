@@ -75,8 +75,8 @@ gono_model <- sampling(sis_model, data = data_sis,
                        control = list(adapt_delta = 0.995, max_treedepth = 14))
 
 
-model_states_draws <- gono_model |> spread_draws(y[ntime, state])
-model_states_draws |> summarise_draws()
+gono_model |> spread_draws(y[ntime, state])|> summarise_draws()
+ 
 #tmp$y[,,2] |> colMeans() |> ggplot2() + geom_line()
 ```
 
@@ -96,6 +96,9 @@ mcmc_areas(gono_model, pars = c('beta', 'gamma'), point_est = 'median') + theme_
 
 
 ```{r}
+model_states_draws <- gono_model |> spread_draws(y[ntime, state])
+
+# FITS
 model_states_draws |>
   median_qi() |>
   mutate(state = factor(state, labels = c('S', 'I'))) |>
@@ -106,13 +109,41 @@ model_states_draws |>
   theme_bw()
 
 model_states_draws |>
-    median_qi() |>
-    mutate(state = factor(state, labels = c('S', 'I'))) |> filter(state == 'I') |>
+  median_qi() |>
+  mutate(state = factor(state, labels = c('S', 'I'))) |>
+  filter(state == 'I') |>
     ggplot() +
     geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntime, y = y), alpha = 0.25) +
     geom_line(aes(col = state, y = y, x = ntime)) + 
     geom_line(data = data_joined |> mutate(YearQ = 1:length(YearQ)), aes(y = Cases, x = YearQ)) +
     theme_bw()
+
+# PREDS
+gono_model |> 
+    spread_draws(y_pred_s[ntimes], y_pred_i[ntimes]) |> 
+    pivot_longer(cols = c('y_pred_s', 'y_pred_i'), names_to = 'state', values_to = 'count') |>
+  group_by(ntimes, state) |>
+  median_qi() |>
+  ggplot() +
+  geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntimes, y = count), alpha = 0.25) +
+  geom_line(aes(col = state, y = count, x = ntimes)) +
+  facet_wrap(~state, scales = 'free_y') +
+  theme_bw()
+
+# With actual
+gono_model |> 
+    spread_draws(y_pred_s[ntimes], y_pred_i[ntimes]) |> 
+    pivot_longer(cols = c('y_pred_s', 'y_pred_i'), names_to = 'state', values_to = 'count') |>
+  filter(state == 'y_pred_i') |>
+  group_by(ntimes, state) |>
+  median_qi() |>
+  ggplot() +
+  geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntimes, y = count), alpha = 0.25) +
+  geom_line(aes(col = state, y = count, x = ntimes)) +
+  geom_line(data = data_joined |> mutate(YearQ = 1:length(YearQ)), aes(y = Cases, x = YearQ)) +
+  theme_bw()
+
+# Reduce(cbind, rstan::extract(gono_model)[c('y_pred_s', 'y_pred_i')])
 ```
 
 
