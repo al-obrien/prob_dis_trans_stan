@@ -2,6 +2,8 @@
 // SIS Model Gonorrhea
 //
 
+// Including additional params on Measurement Error from surveillance data
+
 
 // Function for SIS
 functions {
@@ -38,6 +40,8 @@ parameters {
   real<lower=0> i_sigma; // Overall var I
   real<lower=0> beta; // Inf rate
   real<lower=0> gamma; // Recovery rate
+  real<lower=0> p_s; 
+  real<lower=0,upper=1> p_i; // Surveillance prop
 }
 
 transformed parameters {
@@ -55,15 +59,22 @@ model {
   i_sigma ~ exponential(1);
   beta ~ normal(0.1, 4);
   gamma ~ normal(0.3, 0.5); // Weigh on more than a few days recovery
+  p_s ~ normal(1, 5); // Truncated normal 
+  p_i ~ beta(40, 200);
   
   // Likelihood
-  pop_sus ~ lognormal(log(y[,1]), s_sigma);
-  cases ~ lognormal(log(y[,2]), i_sigma);
+  for ( t in 1:ntime) { // Loop otherwise STAN doesnt know how to multiply
+    pop_sus ~ lognormal(log(y[t,1] * p_s), s_sigma);
+    cases ~ lognormal(log(y[t,2] * p_i), i_sigma);
+  }
+
 }
 
 generated quantities {
   array[ntime] real<lower=0> y_pred_i;
   array[ntime] real<lower=0> y_pred_s;
-  y_pred_s = lognormal_rng(log(y[,1]), s_sigma);
-  y_pred_i = lognormal_rng(log(y[,2]), i_sigma);
+  for (t in 1:ntime) { 
+    y_pred_s = lognormal_rng(log(y[t,1]* p_s), s_sigma);
+    y_pred_i = lognormal_rng(log(y[t,2]* p_i), i_sigma);
+  }
 }
