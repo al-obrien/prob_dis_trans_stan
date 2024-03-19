@@ -11,6 +11,8 @@ library(dplyr)
 library(tidyr)
 library(lubridate)
 library(ggplot2)
+library(tidybayes)
+library(bayesplot)
 ```
 
 
@@ -57,11 +59,12 @@ We are assuming we know nothing about the true S and I groupings.
 
 ```{r}
 cases <- data_joined$Cases
-pop <- data_joined$Population[1]
+pop_sus <- data_joined$Population - cases
 ntime <- length(cases)
 
 data_sis <- list(ntime = ntime, 
                  cases = cases,
+                 pop_sus = pop_sus,
                  ts =  1:(ntime-1))
 
 
@@ -69,9 +72,47 @@ sis_model <- stan_model('sis_gono_simple.stan')
 gono_model <- sampling(sis_model, data = data_sis,
                        seed = 1294,
                        cores = 4, chains = 4, iter = 3000,
-                       control = list(adapt_delta = 0.99, max_treedepth = 15))
+                       control = list(adapt_delta = 0.995, max_treedepth = 14))
 
 
+model_states_draws <- gono_model |> spread_draws(y[ntime, state])
+model_states_draws |> summarise_draws()
+#tmp$y[,,2] |> colMeans() |> ggplot2() + geom_line()
+```
+
+### Plots
+
+```{r}
+gono_model |> 
+  spread_draws(y[ntime, state])|> 
+  median_qi() |>
+  ggplot(aes(y = y, x = ntime)) +
+  geom_pointinterval(aes(linewidth = -.width, ymin = .lower, ymax = .upper)) +
+  facet_wrap(~state, scales = 'free_y')
+
+mcmc_areas(gono_model, pars = c('beta', 'gamma'), point_est = 'median') + theme_bw()
+#rstan::stan_plot(gono_model, pars = c('beta', 'gamma'))
+```
+
+
+```{r}
+model_states_draws |>
+  median_qi() |>
+  mutate(state = factor(state, labels = c('S', 'I'))) |>
+  ggplot() +
+  geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntime, y = y), alpha = 0.25) +
+  geom_line(aes(col = state, y = y, x = ntime)) +
+  facet_wrap(~state, scales = 'free_y') +
+  theme_bw()
+
+model_states_draws |>
+    median_qi() |>
+    mutate(state = factor(state, labels = c('S', 'I'))) |> filter(state == 'I') |>
+    ggplot() +
+    geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntime, y = y), alpha = 0.25) +
+    geom_line(aes(col = state, y = y, x = ntime)) + 
+    geom_line(data = data_joined |> mutate(YearQ = 1:length(YearQ)), aes(y = Cases, x = YearQ)) +
+    theme_bw()
 ```
 
 

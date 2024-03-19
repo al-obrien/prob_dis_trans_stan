@@ -27,13 +27,15 @@ functions {
 data {
   int<lower=0> ntime;
   real<lower=0> cases[ntime]; // Inf at each time point
+  real<lower=0> pop_sus[ntime]; // Obs possible susp
   real<lower=0> ts[ntime-1];
 }
 
 
 parameters {
-  vector<lower=0, upper = 5000000>[2] state0; // Initial Sus and Inf
-  real<lower=0> sigma; // Overall var
+  vector<lower=0>[2] state0; // Initial Sus and Inf
+  real<lower=0> s_sigma; // Overall var S
+  real<lower=0> i_sigma; // Overall var I
   real<lower=0> beta; // Inf rate
   real<lower=0> gamma; // Recovery rate
   //real<lower=0,upper=1> p; // Surveillance prop
@@ -48,14 +50,22 @@ transformed parameters {
 
 model {
   // Priors
-  state0[1] ~ lognormal(log(1e6), 3);
+  state0[1] ~ lognormal(log(100), 3);
   state0[2] ~ lognormal(log(10), 1);
-  sigma ~ exponential(1);
-  beta ~ normal(0.25, 2);
+  s_sigma ~ exponential(1);
+  i_sigma ~ exponential(1);
+  beta ~ normal(0.1, 4);
   gamma ~ normal(0.3, 0.5); // Weigh on more than a few days recovery
   //p ~ beta();
   
   // Likelihood
-  cases ~ lognormal(log(y[,2]), sigma);
+  pop_sus ~ lognormal(log(y[,1]), s_sigma);
+  cases ~ lognormal(log(y[,2]), i_sigma);
 }
 
+generated quantities {
+  array[ntime] real<lower=0> y_pred_i;
+  array[ntime] real<lower=0> y_pred_s;
+  y_pred_s = lognormal_rng(log(y[,1]), s_sigma);
+  y_pred_i = lognormal_rng(log(y[,2]), i_sigma);
+}
