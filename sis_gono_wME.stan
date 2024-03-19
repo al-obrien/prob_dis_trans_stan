@@ -1,11 +1,13 @@
-//
+/*
+
 // SIS Model Gonorrhea
-//
+
+*/
 
 // Including additional params on Measurement Error from surveillance data
 
 
-// Function for SIS
+// Function for SIS (states in and returned must be same length)
 functions {
 
   // Using more recent syntax for ODE solvers in STAN
@@ -16,11 +18,21 @@ functions {
     real S = state[1];
     real I = state[2];
     real N = S + I;
+    real incid = beta * I * S / N;
+    real recov = gamma * I;
 
-    dydt[1] = -(beta * I * S / N) + (gamma * I); // dS/dt
-    dydt[2] = (beta * I * S / N) - (gamma * I); // dI/dt
-    
+    dydt[1] = -(incid) + recov; // dS/dt
+    dydt[2] = incid - recov; // dI/dt
+
     return dydt;
+  }
+  
+  real incidR(real S, real I, real beta) {
+    return beta * I * S / (S + I);
+  }
+  
+  real recovR(real I, real gamma){
+    return gamma * I;
   }
   
 }
@@ -28,9 +40,14 @@ functions {
 // Input data
 data {
   int<lower=0> ntime;
-  real<lower=0> cases[ntime]; // Inf at each time point
-  real<lower=0> pop_sus[ntime]; // Obs possible susp
-  real<lower=0> ts[ntime-1];
+  real<lower=0> new_cases[ntime]; // New Infs
+  real<lower=0> pop_sus[ntime+1]; // Obs possible susp
+  real<lower=0> ts[ntime];
+}
+
+transformed data {
+  int<lower=0> ntime_w0;
+  ntime_w0 = ntime + 1;
 }
 
 
@@ -45,10 +62,20 @@ parameters {
 }
 
 transformed parameters {
-  array[ntime] vector<lower=0>[2] y; // Sus and Inf states after 0 time
-  y[1,1] = state0[1];
-  y[1,2] = state0[2];
-  y[2:ntime, 1:2] = ode_rk45(sis, state0, 0, ts, beta, gamma);
+  array[ntime_w0] vector<lower=0>[2] y; // Sus and Inf states after 0 time
+  array[ntime] vector<lower=0>[2] rates; // Sus and Inf states after 0 time
+  y[1,1] = state0[1]; // S0
+  y[1,2] = state0[2]; // I0
+  
+  // time 1 is 0, for incid, need to extend so can all be in 1 array
+  y[2:ntime_w0, 1:2] = ode_rk45(sis, state0, 0, ts, beta, gamma); 
+  
+  // One step less
+  for(t in 1:ntime) {
+    rates[t, 1] = incidR(y[t, 1], y[t, 2], beta);
+    rates[t, 2] = recovR(y[t, 2], gamma);
+  }
+
 }
 
 model {
@@ -57,24 +84,30 @@ model {
   state0[2] ~ lognormal(log(10), 1);
   s_sigma ~ exponential(1);
   i_sigma ~ exponential(1);
-  beta ~ normal(0.1, 4);
-  gamma ~ normal(0.3, 0.5); // Weigh on more than a few days recovery
-  p_s ~ normal(1, 5); // Truncated normal 
+  beta ~ normal(1, 3); // Recall its dt per quarter
+  gamma ~ normal(4, 1.5); // Weigh on more than a few days recovery (dt is quarter... ~1/0.25)
+  p_s ~ normal(2, 3); // Truncated normal 
   p_i ~ beta(40, 200);
   
-  // Likelihood
-  for ( t in 1:ntime) { // Loop otherwise STAN doesnt know how to multiply
-    pop_sus ~ lognormal(log(y[t,1] * p_s), s_sigma);
-    cases ~ lognormal(log(y[t,2] * p_i), i_sigma);
+  // Likelihood (loop otherwise STAN doesnt know how to multiply)
+  for (t in 1:ntime_w0) { 
+    pop_sus[t] ~ lognormal(log(y[t,1] * p_s), s_sigma);
+    
+    // change in incid is 1 less in size than all suscep
+    if (t < ntime_w0) {
+      new_cases[t] ~ lognormal(log(rates[t,1] * p_i), i_sigma);
+    }
+    
   }
-
 }
 
 generated quantities {
+  array[ntime_w0] real<lower=0> y_pred_s;
   array[ntime] real<lower=0> y_pred_i;
-  array[ntime] real<lower=0> y_pred_s;
-  for (t in 1:ntime) { 
-    y_pred_s = lognormal_rng(log(y[t,1]* p_s), s_sigma);
-    y_pred_i = lognormal_rng(log(y[t,2]* p_i), i_sigma);
+  for (t in 1:ntime_w0) { 
+    y_pred_s[t] = lognormal_rng(log(y[t,1]* p_s), s_sigma);
+    if (t < ntime_w0) {
+      y_pred_i[t] = lognormal_rng(log(rates[t,1]* p_i), i_sigma);
+    }
   }
 }

@@ -23,7 +23,12 @@ compartments.
 
 Assumes no incubation period, and becomes susceptible following
 infection (no convalescent period). Furthermore, to start, there is no
-vital effects and the model is a closed system.
+vital effects and the model is a closed system. Must consider that the
+data provided is technically an incidence $\Delta I$, not a prevalence;
+furthermore, the time scale is on units of YQ, not days. Since there is
+no real good measure of susceptible people, we took some liberties by
+using population denominators. Ideally, sero-surveillance or other
+information would be used to get a better estimate.
 
 ## Compartments
 
@@ -75,14 +80,14 @@ distributions could also be used, such as the negative-binomial.
 $$
 \begin{align}
 &\textbf{Likelihood}\\
-&s_t \sim logNormal(log(qS_t), \sigma_t) \\
-&i_t \sim logNormal(log(pI_t), \sigma_t) \\\\
+&s_t \sim logNormal(log(qS_t), {\sigma}^1_t) \\
+&i_t \sim logNormal(log(p\Delta I_t), {\sigma}^2_t) \\\\
 &\textbf{Priors}\\
-&\sigma \sim exponential(1) \\
-&p \sim halfNormal() \\
-&p \sim beta() \\
-&\beta \sim halfNormal() \\
-&\gamma \sim halfNormal() \\
+&\sigma[2] \sim exponential(1) \\
+&q \sim halfNormal(2, 3) \\
+&p \sim beta(40, 200) \\
+&\beta \sim halfNormal(1, 3) \\
+&\gamma \sim halfNormal(4, 1.5) \\
 \end{align}
 $$
 

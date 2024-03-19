@@ -21,14 +21,27 @@ functions {
     return dydt;
   }
   
+  real incidR(real S, real I, real beta) {
+    return beta * I * S / (S + I);
+  }
+  
+  real recovR(real I, real gamma){
+    return gamma * I;
+  }
+  
 }
 
 // Input data
 data {
   int<lower=0> ntime;
-  real<lower=0> cases[ntime]; // Inf at each time point
-  real<lower=0> pop_sus[ntime]; // Obs possible susp
-  real<lower=0> ts[ntime-1];
+  real<lower=0> new_cases[ntime]; // Inf at each time point
+  real<lower=0> pop_sus[ntime+1]; // Obs possible susp
+  real<lower=0> ts[ntime];
+}
+
+transformed data {
+  int<lower=0> ntime_w0;
+  ntime_w0 = ntime + 1;
 }
 
 
@@ -41,10 +54,18 @@ parameters {
 }
 
 transformed parameters {
-  array[ntime] vector<lower=0>[2] y; // Sus and Inf states after 0 time
+  array[ntime_w0] vector<lower=0>[2] y; // Sus and Inf states after 0 time
+  array[ntime] vector<lower=0>[2] rates; // Sus and Inf states after 0 time
   y[1,1] = state0[1];
   y[1,2] = state0[2];
-  y[2:ntime, 1:2] = ode_rk45(sis, state0, 0, ts, beta, gamma);
+  
+  y[2:ntime_w0, 1:2] = ode_rk45(sis, state0, 0, ts, beta, gamma);
+  
+  // One step less
+  for(t in 1:ntime) {
+    rates[t, 1] = incidR(y[t, 1], y[t, 2], beta);
+    rates[t, 2] = recovR(y[t, 2], gamma);
+  }
 }
 
 model {
@@ -53,17 +74,17 @@ model {
   state0[2] ~ lognormal(log(10), 1);
   s_sigma ~ exponential(1);
   i_sigma ~ exponential(1);
-  beta ~ normal(0.1, 4);
-  gamma ~ normal(0.3, 0.5); // Weigh on more than a few days recovery
+  beta ~ normal(1, 3);
+  gamma ~ normal(4, 1.5); // Weigh on more than a few days recovery
   
   // Likelihood
   pop_sus ~ lognormal(log(y[,1]), s_sigma);
-  cases ~ lognormal(log(y[,2]), i_sigma);
+  new_cases ~ lognormal(log(rates[,1]), i_sigma);
 }
 
 generated quantities {
+  array[ntime_w0] real<lower=0> y_pred_s;
   array[ntime] real<lower=0> y_pred_i;
-  array[ntime] real<lower=0> y_pred_s;
   y_pred_s = lognormal_rng(log(y[,1]), s_sigma);
-  y_pred_i = lognormal_rng(log(y[,2]), i_sigma);
+  y_pred_i = lognormal_rng(log(rates[,1]), i_sigma);
 }

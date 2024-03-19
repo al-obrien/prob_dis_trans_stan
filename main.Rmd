@@ -63,10 +63,15 @@ pop_sus <- data_joined$Population - cases
 ntime <- length(cases)
 
 data_sis <- list(ntime = ntime, 
-                 cases = cases,
-                 pop_sus = pop_sus,
-                 ts =  1:(ntime-1))
+                 new_cases = cases,
+                 pop_sus = c(pop_sus[1], pop_sus), # Extend out for Suscep
+                 ts =  1:ntime)
+```
 
+
+## Model fits
+
+```{r}
 # SIMPLE MODEL
 sis_model <- stan_model('sis_gono_simple.stan')
 gono_model <- sampling(sis_model, data = data_sis,
@@ -84,8 +89,10 @@ sis_model_me <- stan_model('sis_gono_wME.stan')
 gono_model_me <- sampling(sis_model_me, data = data_sis,
                        seed = 1294,
                        cores = 4, chains = 4, iter = 3000,
-                       control = list(adapt_delta = 0.995, max_treedepth = 14))
+                       control = list(adapt_delta = 0.999, max_treedepth = 17))
 ```
+
+## Model Simple
 
 ### Plots
 
@@ -154,9 +161,25 @@ gono_model |>
 ```
 
 
-## Model fits
+## Model ME
 
 ```{r}
 
+```
+
+### Plots
+
+```{r}
+gono_model_me |> 
+    spread_draws(y_pred_s[ntimes], y_pred_i[ntimes]) |> 
+    pivot_longer(cols = c('y_pred_s', 'y_pred_i'), names_to = 'state', values_to = 'count') |>
+  filter(state == 'y_pred_i') |>
+  group_by(ntimes, state) |>
+  median_qi() |>
+  ggplot() +
+  geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntimes, y = count), alpha = 0.25) +
+  geom_line(aes(col = state, y = count, x = ntimes)) +
+  geom_line(data = data_joined |> mutate(YearQ = 1:length(YearQ)), aes(y = Cases, x = YearQ)) +
+  theme_bw()
 ```
 
