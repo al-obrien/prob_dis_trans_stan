@@ -1,0 +1,83 @@
+---
+title: "gono_sis"
+output: html_document
+date: "2024-03-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rstan)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+```
+
+
+## Data Load
+
+```{r}
+data_cases <- read.csv('data/gono_q.csv')
+data_denom <- read.csv('data/pop_denom.csv')
+```
+
+
+## Data Clean
+
+```{r}
+data_cases_f <- data_cases |>
+  mutate(YearQ = yq(Year), 
+         Year = year(YearQ)) |>
+  filter(Sex == 'BOTH', Age == 'ALL', Year > 2020) |>
+  rename(Cases = Case.Counts, Disease = Disease.Name)
+
+data_denom_f <- data_denom |>
+  filter(Age == 'ALL', Sex == 'BOTH') |>
+  mutate(Year = as.integer(Year)) |>
+  select(-Age, -Sex)
+
+data_joined <- left_join(data_cases_f, data_denom_f, by = c('Year', 'Geography'))
+data_joined <- data_joined |> 
+  mutate(rate100k = round(1e5 * (Cases / Population), 2))
+```
+
+## Data exploration
+
+```{r}
+ggplot(data_joined) +
+  geom_line(aes(y = Cases, x = YearQ)) +
+  geom_point(aes(y = Cases, x = YearQ)) +
+  theme_bw()
+```
+
+
+## Model prep
+
+We are assuming we know nothing about the true S and I groupings.
+
+```{r}
+cases <- data_joined$Cases
+pop <- data_joined$Population[1]
+ntime <- length(cases)
+
+data_sis <- list(ntime = ntime, 
+                 cases = cases,
+                 ts =  1:(ntime-1))
+
+
+sis_model <- stan_model('sis_gono_simple.stan')
+gono_model <- sampling(sis_model, data = data_sis,
+                       seed = 1294,
+                       cores = 4, chains = 4, iter = 3000,
+                       control = list(adapt_delta = 0.99, max_treedepth = 15))
+
+
+```
+
+
+## Model fits
+
+```{r}
+
+```
+
