@@ -83,6 +83,8 @@ model {
 }
 
 generated quantities {
+  real R0 = beta / gamma; // Rough estimate with assumptions on suscep of pop
+  real recov_time = 1 / gamma;
   array[ntime_w0] real<lower=0> y_pred_s;
   array[ntime] real<lower=0> y_pred_i;
   y_pred_s = lognormal_rng(log(y[,1]), s_sigma);

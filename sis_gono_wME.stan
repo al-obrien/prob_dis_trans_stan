@@ -102,6 +102,8 @@ model {
 }
 
 generated quantities {
+  real R0 = beta / gamma; // Rough estimate with assumptions on suscep of pop
+  real recov_time = 1 / gamma;
   array[ntime_w0] real<lower=0> y_pred_s;
   array[ntime] real<lower=0> y_pred_i;
   for (t in 1:ntime_w0) { 
