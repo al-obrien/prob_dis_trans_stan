@@ -68,9 +68,9 @@ data_sis <- list(ntime = ntime,
                  ts =  1:ntime)
 ```
 
+## Model Simple
 
-## Model fits
-
+### Fit
 ```{r}
 # SIMPLE MODEL
 sis_model <- stan_model('sis_gono_simple.stan')
@@ -79,20 +79,11 @@ gono_model <- sampling(sis_model, data = data_sis,
                        cores = 4, chains = 4, iter = 3000,
                        control = list(adapt_delta = 0.995, max_treedepth = 14))
 
-
 gono_model |> spread_draws(y[ntime, state])|> summarise_draws()
 #tmp$y[,,2] |> colMeans() |> ggplot2() + geom_line()
 
-
-# MODEL WITH ME
-sis_model_me <- stan_model('sis_gono_wME.stan')
-gono_model_me <- sampling(sis_model_me, data = data_sis,
-                       seed = 1294,
-                       cores = 4, chains = 4, iter = 3000,
-                       control = list(adapt_delta = 0.999, max_treedepth = 17))
 ```
 
-## Model Simple
 
 ### Plots
 
@@ -163,8 +154,14 @@ gono_model |>
 
 ## Model ME
 
+### Fit
 ```{r}
-
+# MODEL WITH ME
+sis_model_me <- stan_model('sis_gono_wME.stan')
+gono_model_me <- sampling(sis_model_me, data = data_sis,
+                       seed = 1294,
+                       cores = 4, chains = 4, iter = 3000,
+                       control = list(adapt_delta = 0.999, max_treedepth = 17))
 ```
 
 ### Plots
@@ -183,3 +180,16 @@ gono_model_me |>
   theme_bw()
 ```
 
+## Model ME + Contact Rates
+
+### Fit
+
+```{r}
+sis_model_me_contact <- stan_model('sis_gono_me_contact.stan')
+gono_model_me_contact <- sampling(sis_model_me_contact, data = data_sis,
+                                  seed = 1294,
+                                  cores = 4, chains = 4, iter = 3000,
+                                  control = list(adapt_delta = 0.999, max_treedepth = 17))
+```
+
+### Plots
