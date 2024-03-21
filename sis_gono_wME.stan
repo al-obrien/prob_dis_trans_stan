@@ -1,10 +1,12 @@
 /*
 
-// SIS Model Gonorrhea
+SIS Model Gonorrhea W/ ME
+
+Including additional params on Measurement Error from surveillance data
 
 */
 
-// Including additional params on Measurement Error from surveillance data
+
 
 
 // Function for SIS (states in and returned must be same length)
@@ -103,13 +105,25 @@ model {
 
 generated quantities {
   real R0 = beta / gamma; // Rough estimate with assumptions on suscep of pop
+  //vector[ntime] Reff; // S * R0, where S is prop suscpep at given time
   real recov_time = 1 / gamma;
+  
   array[ntime_w0] real<lower=0> y_pred_s;
   array[ntime] real<lower=0> y_pred_i;
+  
+  vector[ntime_w0] log_likS;
+  vector[ntime] log_likI;
+  vector[ntime+ntime_w0] log_lik;
+  
   for (t in 1:ntime_w0) { 
     y_pred_s[t] = lognormal_rng(log(y[t,1]* p_s), s_sigma);
+    log_likS[t] = lognormal_lpdf(pop_sus[t] | log(y[t,1]*p_s), s_sigma);
     if (t < ntime_w0) {
       y_pred_i[t] = lognormal_rng(log(rates[t,1]* p_i), i_sigma);
+      log_likI[t] = lognormal_lpdf(new_cases[t] | log(rates[t,1]*p_i), i_sigma);
     }
   }
+  
+  log_lik = append_row(log_likS, log_likI); // Combined loglik
+  
 }
