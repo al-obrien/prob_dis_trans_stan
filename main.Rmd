@@ -65,7 +65,8 @@ ntime <- length(cases)
 data_sis <- list(ntime = ntime, 
                  new_cases = cases,
                  pop_sus = c(pop_sus[1], pop_sus), # Extend out for Suscep
-                 ts =  1:ntime)
+                 ts =  1:ntime, 
+                 compute_loglik = TRUE)
 ```
 
 ## Model Simple
@@ -186,6 +187,7 @@ gono_model_me |>
 
 ```{r}
 sis_model_me_contact <- stan_model('sis_gono_me_contact.stan')
+
 gono_model_me_contact <- sampling(sis_model_me_contact, data = data_sis,
                                   seed = 1294,
                                   cores = 4, chains = 4, iter = 3000,
@@ -193,3 +195,32 @@ gono_model_me_contact <- sampling(sis_model_me_contact, data = data_sis,
 ```
 
 ### Plots
+
+```{r}
+gono_model_me_contact |> 
+    spread_draws(y_pred_s[ntimes], y_pred_i[ntimes]) |> 
+    pivot_longer(cols = c('y_pred_s', 'y_pred_i'), names_to = 'state', values_to = 'count') |>
+  filter(state == 'y_pred_i') |>
+  group_by(ntimes, state) |>
+  median_qi() |>
+  ggplot() +
+  geom_ribbon(aes(fill = state, ymin = .lower, ymax = .upper, x = ntimes, y = count), alpha = 0.25) +
+  geom_line(aes(col = state, y = count, x = ntimes)) +
+  geom_line(data = data_joined |> mutate(YearQ = 1:length(YearQ)), aes(y = Cases, x = YearQ)) +
+  theme_bw()
+```
+
+##
+
+```{r}
+sis_model_me_contact <- stan_model('sis_gono_me_contact.stan')
+
+data_sis <- append(data_sis,
+                   list(prodM = matrix(c(0.75, 0.25, 0.25, 0.75), nrow = 2)))
+
+gono_model_me_contact <- sampling(sis_model_me_contact, data = data_sis,
+                                  seed = 1294,
+                                  cores = 4, chains = 4, iter = 3000,
+                                  control = list(adapt_delta = 0.999, max_treedepth = 17))
+```
+
