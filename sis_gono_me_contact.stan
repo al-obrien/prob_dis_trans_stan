@@ -5,6 +5,8 @@ SIS Model Gonorrhea
 Including additional params on Measurement Error from surveillance data and 
 two types of contact rates (core grp vs other).
 
+Assumes that there are 2 possible contact rates (hi low) but that they dont care which infected 
+state they interact with
 
 */
 
@@ -52,6 +54,7 @@ data {
   real<lower=0> new_cases[ntime]; // New Infs
   real<lower=0> pop_sus[ntime+1]; // Obs possible susp
   real<lower=0> ts[ntime];
+  int<lower=0,upper=1> compute_loglik;
 }
 
 transformed data {
@@ -103,15 +106,17 @@ model {
   p_s ~ normal(2, 3); // Truncated normal 
   p_i ~ beta(40, 200);
   
-  // Likelihood (loop otherwise STAN doesnt know how to multiply)
-  for (t in 1:ntime_w0) { 
-    pop_sus[t] ~ lognormal(log(y[t,1] * p_s), s_sigma);
-    
-    // change in incid is 1 less in size than all suscep
-    if (t < ntime_w0) {
-      new_cases[t] ~ lognormal(log(rates[t,1] * p_i), i_sigma);
+  if(compute_loglik == 1) {
+    // Likelihood (loop otherwise STAN doesnt know how to multiply)
+    for (t in 1:ntime_w0) { 
+      pop_sus[t] ~ lognormal(log(y[t,1] * p_s), s_sigma);
+      
+      // change in incid is 1 less in size than all suscep
+      if (t < ntime_w0) {
+        new_cases[t] ~ lognormal(log(rates[t,1] * p_i), i_sigma);
+      }
+      
     }
-    
   }
 }
 
