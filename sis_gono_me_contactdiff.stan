@@ -13,32 +13,33 @@ two types of contact rates (core grp vs other).
 
 // Function for SIS (states in and returned must be same length)
 functions {
-
-
+  
   vector sis(real t, vector state, matrix probM, vector c, real beta, real gamma) {
     
     vector[4] dydt;
-        
+    
     // Initial predicted states
     vector[2] S = state[1:2]; // Lo, Hi
     vector[2] I = state[3:4]; // Lo, Hi
     vector[2] N = S + I;
     
     // FOI, one for LO other for HI (phi[1] = FOI for lo, phi[2 = FOI for hi])
-    vector[2] phi = (beta * c) .* to_vector(probM * to_matrix(I ./ N));
+    vector[2] phi = (beta * c) .* to_vector(probM * to_matrix(I ./ N)); // type conver necessary?
     vector[2] recov = gamma .* I;
     
     // S states (lo, hi)
     dydt[1] = -(phi[1] *S[1]) + recov[1]; // dS/dt
     dydt[2] = -(phi[2] *S[2]) + recov[2];
+    //dydt[1:2] = -(phi .* S) + recov;
     
     // I states
     dydt[3] = (phi[1]*S[1]) - recov[1]; // dI/dt
     dydt[4] = (phi[2]*S[2]) - recov[2];
+    //dydt[3:4] = (phi .* S) - recov;
     
     return dydt;
   }
-
+  
   vector incidR(vector S, vector I, matrix probM, vector c, real beta) {
     // Transpose from inbound row to col vecs????????
     vector[2] N = S + I;
@@ -53,6 +54,7 @@ functions {
     incid[2] = (It2[2] - It1[2]) + recov[2]; //hi
     return incid;
   }
+  
   vector recovR(vector I, real gamma){
     return gamma .* I;
   }
@@ -76,7 +78,7 @@ transformed data {
 
 
 parameters {
-  vector<lower=0>[2] Nstate0; // Initial Sus and Inf
+  vector<lower=0,upper=5e6>[2] Nstate0; // Initial Sus and Inf; cant be more than 5 million suscep
   real<lower=0> s_sigma; // Overall var S
   real<lower=0> i_sigma; // Overall var I
   real<lower=0,upper=1> beta; // Trans prob
@@ -90,7 +92,7 @@ parameters {
 transformed parameters {
   array[ntime_w0] vector<lower=0>[4] y; // Sus and Inf states after 0 time
   array[ntime] vector<lower=0>[4] rates; // Sus and Inf states after 0 time
-
+  
   // Initial conditions, from predicted totals...
   y[1,1] = frac * Nstate0[1]; // S0lo
   y[1,2] = (1- frac) * Nstate0[1]; // S0hi
@@ -107,21 +109,21 @@ transformed parameters {
     //rates[t, 1:2] = incidR(y[t, 1:2], y[t, 3:4], probM, c, beta);
     
   }
-
+  
 }
 
 model {
   // Priors
-  Nstate0[1] ~ lognormal(log(100), 3);
-  Nstate0[2] ~ lognormal(log(10), 1);
+  Nstate0[1] ~ lognormal(log(8e5), 0.4);
+  Nstate0[2] ~ lognormal(log(5e3), 1);
   s_sigma ~ exponential(1);
   i_sigma ~ exponential(1);
-  gamma ~ normal(4, 1.5); // Weigh on more than a few days recovery (dt is quarter... ~1/0.25)
-  frac ~ beta(5, 150); // Most likely under 10%
-  c[1]~ normal(.25, 3); // Lo
-  c[2]~ normal(4, 3); // Hi
-  p_s ~ normal(2, 3); // Truncated normal 
   beta ~ beta(10, 2.5); // Recall its dt per quarter
+  gamma ~ normal(1.5, 1); // Weigh on more than a few days recovery (dt is quarter... ~1/0.33)
+  frac ~ beta(3, 100); // Most likely under 10%
+  c[1]~ normal(.25, 0.3); // Lo
+  c[2]~ normal(5, 2); // Hi
+  p_s ~ normal(3, 1); // Truncated normal 
   p_i ~ beta(40, 200);
   
   if(compute_loglik == 1) {
