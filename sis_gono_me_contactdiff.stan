@@ -79,7 +79,7 @@ parameters {
   vector<lower=0>[2] Nstate0; // Initial Sus and Inf
   real<lower=0> s_sigma; // Overall var S
   real<lower=0> i_sigma; // Overall var I
-  real<lower=0> beta; // Inf rate
+  real<lower=0,upper=1> beta; // Trans prob
   real<lower=0> gamma; // Recovery rate
   real<lower=0, upper=1> frac; // fraction of high cont
   vector<lower=0>[2] c; // 1 low, 2 high
@@ -116,12 +116,12 @@ model {
   Nstate0[2] ~ lognormal(log(10), 1);
   s_sigma ~ exponential(1);
   i_sigma ~ exponential(1);
-  beta ~ normal(0.8, 3); // Recall its dt per quarter
   gamma ~ normal(4, 1.5); // Weigh on more than a few days recovery (dt is quarter... ~1/0.25)
   frac ~ beta(5, 150); // Most likely under 10%
   c[1]~ normal(.25, 3); // Lo
   c[2]~ normal(4, 3); // Hi
   p_s ~ normal(2, 3); // Truncated normal 
+  beta ~ beta(10, 2.5); // Recall its dt per quarter
   p_i ~ beta(40, 200);
   
   if(compute_loglik == 1) {
