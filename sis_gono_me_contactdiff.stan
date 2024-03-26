@@ -46,6 +46,13 @@ functions {
     return phi .* S;
   }
   
+  // Only need recov, cheaper calc
+  vector indir_incidR(vector It1, vector It2, vector recov) {
+    vector[2] incid;
+    incid[1] = (It2[1] - It1[1]) + recov[1]; //lo
+    incid[2] = (It2[2] - It1[2]) + recov[2]; //hi
+    return incid;
+  }
   vector recovR(vector I, real gamma){
     return gamma .* I;
   }
@@ -90,13 +97,15 @@ transformed parameters {
   y[1,3] = frac * Nstate0[2]; // I0lo
   y[1,4] = (1- frac) * Nstate0[2]; // I0hi
   
-  // time 1 is 0, for incid, need to extend so can all be in 1 array
-  y[2:ntime_w0, 1:2] = ode_rk45(sis, y[1,1:4], 0, ts, probM, c, beta, gamma); 
+  // time 1 is 0, for incid, need to extend so can all be in 1 array (initial time is 0 because first data is increase in cases)
+  y[2:ntime_w0, 1:4] = ode_rk45(sis, y[1,1:4], 0, ts, probM, c, beta, gamma); 
   
   // One step less
   for(t in 1:ntime) {
-    rates[t, 1:2] = incidR(y[t, 1:2], y[t, 3:4], probM, c, beta);
-    rates[t, 3:4] = recovR(y[t, 3:4], gamma);
+    rates[t, 3:4] = recovR(y[t, 3:4], gamma); // ntime vector, backstep to keep 1:max
+    rates[t, 1:2] = indir_incidR(y[t, 3:4], y[t+1, 3:4], rates[t, 3:4]); // Provide I across states and with recov rate
+    //rates[t, 1:2] = incidR(y[t, 1:2], y[t, 3:4], probM, c, beta);
+    
   }
 
 }
@@ -119,11 +128,11 @@ model {
     
     // Likelihood (loop otherwise STAN doesnt know how to multiply)
     for (t in 1:ntime_w0) { 
-      pop_sus[t] ~ lognormal(log(y[t,1] * p_s), s_sigma);
+      pop_sus[t] ~ lognormal(log(sum(y[t,1:2]) * p_s), s_sigma);
       
       // change in incid is 1 less in size than all suscep
       if (t < ntime_w0) {
-        new_cases[t] ~ lognormal(log(rates[t,1] * p_i), i_sigma);
+        new_cases[t] ~ lognormal(log(sum(rates[t,1:2]) * p_i), i_sigma);
       }
     }
   }
@@ -144,11 +153,11 @@ generated quantities {
   vector[ntime+ntime_w0] log_lik;
   
   for (t in 1:ntime_w0) { 
-    y_pred_s[t] = lognormal_rng(log(y[t,1]* p_s), s_sigma);
-    log_likS[t] = lognormal_lpdf(pop_sus[t] | log(y[t,1]*p_s), s_sigma);
+    y_pred_s[t] = lognormal_rng(log(sum(y[t,1:2])* p_s), s_sigma);
+    log_likS[t] = lognormal_lpdf(pop_sus[t] | log(sum(y[t,1:2])*p_s), s_sigma);
     if (t < ntime_w0) {
-      y_pred_i[t] = lognormal_rng(log(rates[t,1]* p_i), i_sigma);
-      log_likI[t] = lognormal_lpdf(new_cases[t] | log(rates[t,1]*p_i), i_sigma);
+      y_pred_i[t] = lognormal_rng(log(sum(rates[t,1:2]) * p_i), i_sigma);
+      log_likI[t] = lognormal_lpdf(new_cases[t] | log(sum(rates[t,1:2])*p_i), i_sigma);
     }
   }
   
